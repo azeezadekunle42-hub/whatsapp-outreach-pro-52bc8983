@@ -90,7 +90,10 @@ export default function Contacts() {
           <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
           <p className="text-sm text-muted-foreground mt-1">{contacts.length} total contacts</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            Format: <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-[11px]">name, phone</code>
+          </span>
           <input
             type="file"
             ref={fileRef}
