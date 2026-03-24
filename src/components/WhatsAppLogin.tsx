@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { QrCode, Loader2, CheckCircle2, XCircle, Smartphone, Unplug, RefreshCw } from 'lucide-react';
+import { QrCode, Loader2, CheckCircle2, XCircle, Smartphone, Unplug, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { whatsappApi, WhatsAppStatus } from '@/lib/whatsappApi';
+import { whatsappApi } from '@/lib/whatsappApi';
 import { toast } from 'sonner';
 
 type Step = 'not-configured' | 'disconnected' | 'connecting' | 'qr' | 'connected' | 'error';
@@ -15,37 +15,42 @@ export default function WhatsAppLogin() {
   const checkStatus = useCallback(async () => {
     try {
       const s = await whatsappApi.getStatus();
-      applyStatus(s);
+      if (s.status === 'connected') {
+        setStep('connected');
+        setQrImage(null);
+      } else if (s.status === 'error') {
+        setStep('error');
+        setErrorMsg(s.message);
+      } else {
+        setStep('disconnected');
+      }
       return s;
     } catch {
       return null;
     }
   }, []);
 
-  const applyStatus = (s: WhatsAppStatus) => {
-    if (s.status === 'connected') {
-      setStep('connected');
-      setQrImage(null);
-    } else if (s.status === 'qr_pending' && s.qr) {
-      setStep('qr');
-      setQrImage(s.qr);
-    } else if (s.status === 'error') {
-      setStep('error');
-      setErrorMsg(s.message);
-    } else {
-      setStep('disconnected');
-    }
-  };
-
   const handleConnect = async () => {
     setStep('connecting');
     try {
-      await whatsappApi.connect();
-      setPolling(true);
-      toast.info('Initializing session…');
-    } catch {
+      const qr = await whatsappApi.getQrCode();
+      if (qr.status === 'already_authorized') {
+        setStep('connected');
+        toast.success('WhatsApp already connected!');
+        return;
+      }
+      if (qr.qr) {
+        setStep('qr');
+        setQrImage(qr.qr);
+        setPolling(true);
+        toast.info('Scan the QR code with WhatsApp');
+      } else {
+        setStep('error');
+        setErrorMsg('Could not get QR code. Make sure your Green API instance is active.');
+      }
+    } catch (err: any) {
       setStep('error');
-      setErrorMsg('Could not reach the WhatsApp server. Check your server URL.');
+      setErrorMsg(err.message || 'Failed to connect');
       toast.error('Connection failed');
     }
   };
@@ -66,14 +71,24 @@ export default function WhatsAppLogin() {
   useEffect(() => {
     if (!polling) return;
     const interval = setInterval(async () => {
-      const s = await checkStatus();
-      if (s?.status === 'connected') {
-        setPolling(false);
-        toast.success('WhatsApp connected!');
+      try {
+        const s = await whatsappApi.getStatus();
+        if (s.status === 'connected') {
+          setStep('connected');
+          setQrImage(null);
+          setPolling(false);
+          toast.success('WhatsApp connected!');
+          return;
+        }
+        // Refresh QR
+        const qr = await whatsappApi.getQrCode();
+        if (qr.qr) setQrImage(qr.qr);
+      } catch {
+        // keep polling
       }
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [polling, checkStatus]);
+  }, [polling]);
 
   // Initial check
   useEffect(() => {
@@ -108,13 +123,25 @@ export default function WhatsAppLogin() {
               <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
                 <XCircle className="w-6 h-6 text-muted-foreground" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                Server not configured. Set your{' '}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">VITE_WHATSAPP_SERVER_URL</code>{' '}
-                and{' '}
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">VITE_WHATSAPP_API_KEY</code>{' '}
-                environment variables.
-              </p>
+              <div className="text-sm text-muted-foreground text-left space-y-2">
+                <p className="text-center font-medium">Set up Green API (free):</p>
+                <ol className="list-decimal list-inside text-xs space-y-1.5">
+                  <li>
+                    Go to{' '}
+                    <a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-0.5">
+                      green-api.com <ExternalLink className="w-3 h-3" />
+                    </a>{' '}
+                    — create a free account
+                  </li>
+                  <li>Create an instance → copy <strong>ID Instance</strong> & <strong>API Token</strong></li>
+                  <li>
+                    Add as Lovable secrets:<br />
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">VITE_GREEN_API_ID_INSTANCE</code><br />
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">VITE_GREEN_API_TOKEN</code>
+                  </li>
+                  <li>Refresh this page</li>
+                </ol>
+              </div>
             </div>
           )}
 
@@ -142,10 +169,8 @@ export default function WhatsAppLogin() {
             <div className="text-center space-y-4 py-4">
               <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
               <div className="space-y-1">
-                <p className="text-sm font-medium">Starting session…</p>
-                <p className="text-xs text-muted-foreground">
-                  This may take a few seconds
-                </p>
+                <p className="text-sm font-medium">Fetching QR code…</p>
+                <p className="text-xs text-muted-foreground">This may take a few seconds</p>
               </div>
             </div>
           )}
@@ -154,11 +179,7 @@ export default function WhatsAppLogin() {
           {step === 'qr' && qrImage && (
             <div className="text-center space-y-4">
               <div className="bg-white p-3 rounded-xl inline-block mx-auto shadow-sm border border-border">
-                <img
-                  src={qrImage}
-                  alt="WhatsApp QR Code"
-                  className="w-56 h-56"
-                />
+                <img src={qrImage} alt="WhatsApp QR Code" className="w-56 h-56" />
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Scan with WhatsApp</p>
