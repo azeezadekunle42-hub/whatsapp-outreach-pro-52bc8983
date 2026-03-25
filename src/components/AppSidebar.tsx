@@ -7,7 +7,9 @@ import {
   Smartphone,
   Activity,
   MessageSquare,
+  LogOut,
 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
