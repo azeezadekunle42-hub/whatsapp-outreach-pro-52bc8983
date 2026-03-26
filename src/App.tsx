@@ -38,6 +38,7 @@ const App = () => (
               <Route path="/templates" element={<Templates />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/logs" element={<LogsAnalytics />} />
+              <Route path="/admin" element={<AdminInstances />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
