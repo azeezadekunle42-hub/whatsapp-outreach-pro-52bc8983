@@ -8,6 +8,7 @@ import {
   Activity,
   MessageSquare,
   LogOut,
+  Shield,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -18,6 +19,7 @@ const links = [
   { to: '/templates', label: 'Templates', icon: FileText },
   { to: '/accounts', label: 'Accounts', icon: Smartphone },
   { to: '/logs', label: 'Logs & Analytics', icon: Activity },
+  { to: '/admin', label: 'Admin', icon: Shield },
 ];
 
 export default function AppSidebar() {

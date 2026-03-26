@@ -11,6 +11,7 @@ import Contacts from "./pages/Contacts";
 import Templates from "./pages/Templates";
 import Accounts from "./pages/Accounts";
 import LogsAnalytics from "./pages/LogsAnalytics";
+import AdminInstances from "./pages/AdminInstances";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/templates" element={<Templates />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/logs" element={<LogsAnalytics />} />
+              <Route path="/admin" element={<AdminInstances />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

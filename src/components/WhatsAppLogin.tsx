@@ -1,41 +1,70 @@
 import { useState, useEffect, useCallback } from 'react';
-import { QrCode, Loader2, CheckCircle2, XCircle, Smartphone, Unplug, RefreshCw, ExternalLink } from 'lucide-react';
+import { QrCode, Loader2, CheckCircle2, XCircle, Smartphone, Unplug, RefreshCw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { whatsappApi } from '@/lib/whatsappApi';
+import { useWhatsAppInstance } from '@/hooks/useWhatsAppInstance';
 import { toast } from 'sonner';
 
-type Step = 'not-configured' | 'disconnected' | 'connecting' | 'qr' | 'connected' | 'error';
+type Step = 'setup' | 'disconnected' | 'connecting' | 'qr' | 'connected' | 'error';
 
 export default function WhatsAppLogin() {
-  const [step, setStep] = useState<Step>('disconnected');
+  const { instance, credentials, loading: instanceLoading, saveInstance, updateStatus, removeInstance } = useWhatsAppInstance();
+  const [step, setStep] = useState<Step>('setup');
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [polling, setPolling] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const [formId, setFormId] = useState('');
+  const [formToken, setFormToken] = useState('');
+  const [formName, setFormName] = useState('');
 
   const checkStatus = useCallback(async () => {
+    if (!credentials) return;
     try {
-      const s = await whatsappApi.getStatus();
+      const s = await whatsappApi.getStatus(credentials);
       if (s.status === 'connected') {
         setStep('connected');
         setQrImage(null);
+        await updateStatus('connected');
       } else if (s.status === 'error') {
         setStep('error');
         setErrorMsg(s.message);
       } else {
         setStep('disconnected');
       }
-      return s;
     } catch {
-      return null;
+      setStep('disconnected');
     }
-  }, []);
+  }, [credentials]);
+
+  useEffect(() => {
+    if (instanceLoading) return;
+    if (!instance) {
+      setStep('setup');
+    } else {
+      checkStatus();
+    }
+  }, [instance, instanceLoading, checkStatus]);
+
+  const handleSaveCredentials = async () => {
+    if (!formId || !formToken) { toast.error('Instance ID and Token are required'); return; }
+    await saveInstance(formId, formToken, formName || undefined);
+    setShowSetup(false);
+    setFormId('');
+    setFormToken('');
+    setFormName('');
+    toast.success('WhatsApp credentials saved');
+  };
 
   const handleConnect = async () => {
+    if (!credentials) return;
     setStep('connecting');
     try {
-      const qr = await whatsappApi.getQrCode();
+      const qr = await whatsappApi.getQrCode(credentials);
       if (qr.status === 'already_authorized') {
         setStep('connected');
+        await updateStatus('connected');
         toast.success('WhatsApp already connected!');
         return;
       }
@@ -46,18 +75,19 @@ export default function WhatsAppLogin() {
         toast.info('Scan the QR code with WhatsApp');
       } else {
         setStep('error');
-        setErrorMsg('Could not get QR code. Make sure your Green API instance is active.');
+        setErrorMsg('Could not get QR code');
       }
     } catch (err: any) {
       setStep('error');
       setErrorMsg(err.message || 'Failed to connect');
-      toast.error('Connection failed');
     }
   };
 
   const handleDisconnect = async () => {
+    if (!credentials) return;
     try {
-      await whatsappApi.disconnect();
+      await whatsappApi.disconnect(credentials);
+      await updateStatus('disconnected');
       setStep('disconnected');
       setQrImage(null);
       setPolling(false);
@@ -67,37 +97,35 @@ export default function WhatsAppLogin() {
     }
   };
 
-  // Poll while waiting for QR scan
   useEffect(() => {
-    if (!polling) return;
+    if (!polling || !credentials) return;
     const interval = setInterval(async () => {
       try {
-        const s = await whatsappApi.getStatus();
+        const s = await whatsappApi.getStatus(credentials);
         if (s.status === 'connected') {
           setStep('connected');
           setQrImage(null);
           setPolling(false);
+          await updateStatus('connected');
           toast.success('WhatsApp connected!');
           return;
         }
-        // Refresh QR
-        const qr = await whatsappApi.getQrCode();
+        const qr = await whatsappApi.getQrCode(credentials);
         if (qr.qr) setQrImage(qr.qr);
-      } catch {
-        // keep polling
-      }
+      } catch { /* keep polling */ }
     }, 5000);
     return () => clearInterval(interval);
-  }, [polling]);
+  }, [polling, credentials]);
 
-  // Initial check
-  useEffect(() => {
-    if (!whatsappApi.isConfigured()) {
-      setStep('not-configured');
-      return;
-    }
-    checkStatus();
-  }, [checkStatus]);
+  if (instanceLoading) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="rounded-xl border border-border bg-card shadow-md p-8 text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -107,46 +135,49 @@ export default function WhatsAppLogin() {
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <Smartphone className="w-7 h-7 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold tracking-tight">WhatsApp Sign In</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Your WhatsApp</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {step === 'connected'
               ? 'Your WhatsApp account is linked'
-              : 'Link your WhatsApp to start sending messages'}
+              : instance
+              ? 'Connect your WhatsApp to start sending'
+              : 'Set up your WhatsApp instance credentials'}
           </p>
         </div>
 
         {/* Body */}
         <div className="p-6">
-          {/* Not Configured */}
-          {step === 'not-configured' && (
-            <div className="text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
-                <XCircle className="w-6 h-6 text-muted-foreground" />
+          {/* Setup - No credentials yet */}
+          {(step === 'setup' || showSetup) && (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Enter the Green API credentials assigned to you by your admin.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Label (optional)</label>
+                  <Input value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g., My Business Line" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Instance ID</label>
+                  <Input value={formId} onChange={e => setFormId(e.target.value)} placeholder="e.g., 7107563687" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">API Token</label>
+                  <Input value={formToken} onChange={e => setFormToken(e.target.value)} placeholder="e.g., 7ee6aa32..." type="password" />
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground text-left space-y-2">
-                <p className="text-center font-medium">Set up Green API (free):</p>
-                <ol className="list-decimal list-inside text-xs space-y-1.5">
-                  <li>
-                    Go to{' '}
-                    <a href="https://green-api.com" target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-0.5">
-                      green-api.com <ExternalLink className="w-3 h-3" />
-                    </a>{' '}
-                    — create a free account
-                  </li>
-                  <li>Create an instance → copy <strong>ID Instance</strong> & <strong>API Token</strong></li>
-                  <li>
-                    Add as Lovable secrets:<br />
-                    <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">VITE_GREEN_API_ID_INSTANCE</code><br />
-                    <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">VITE_GREEN_API_TOKEN</code>
-                  </li>
-                  <li>Refresh this page</li>
-                </ol>
+              <div className="flex gap-2">
+                {instance && (
+                  <Button variant="outline" className="flex-1" onClick={() => setShowSetup(false)}>Cancel</Button>
+                )}
+                <Button className="flex-1" onClick={handleSaveCredentials}>Save Credentials</Button>
               </div>
             </div>
           )}
 
           {/* Disconnected */}
-          {step === 'disconnected' && (
+          {step === 'disconnected' && !showSetup && (
             <div className="text-center space-y-4">
               <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
                 <QrCode className="w-10 h-10 text-muted-foreground/60" />
@@ -154,29 +185,35 @@ export default function WhatsAppLogin() {
               <div className="space-y-1">
                 <p className="text-sm font-medium">Ready to connect</p>
                 <p className="text-xs text-muted-foreground">
-                  Click below to generate a QR code, then scan it with your phone
+                  Instance: {instance?.instance_name}
                 </p>
               </div>
               <Button onClick={handleConnect} className="w-full">
                 <QrCode className="w-4 h-4 mr-2" />
                 Generate QR Code
               </Button>
-            </div>
-          )}
-
-          {/* Connecting / Loading */}
-          {step === 'connecting' && (
-            <div className="text-center space-y-4 py-4">
-              <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Fetching QR code…</p>
-                <p className="text-xs text-muted-foreground">This may take a few seconds</p>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" className="flex-1" onClick={() => setShowSetup(true)}>
+                  <Settings className="w-3.5 h-3.5 mr-1.5" />
+                  Change Credentials
+                </Button>
+                <Button variant="ghost" size="sm" className="flex-1 text-destructive" onClick={async () => { await removeInstance(); toast.success('Instance removed'); }}>
+                  Remove
+                </Button>
               </div>
             </div>
           )}
 
+          {/* Connecting */}
+          {step === 'connecting' && !showSetup && (
+            <div className="text-center space-y-4 py-4">
+              <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
+              <p className="text-sm font-medium">Fetching QR code…</p>
+            </div>
+          )}
+
           {/* QR Code */}
-          {step === 'qr' && qrImage && (
+          {step === 'qr' && qrImage && !showSetup && (
             <div className="text-center space-y-4">
               <div className="bg-white p-3 rounded-xl inline-block mx-auto shadow-sm border border-border">
                 <img src={qrImage} alt="WhatsApp QR Code" className="w-56 h-56" />
@@ -198,7 +235,7 @@ export default function WhatsAppLogin() {
           )}
 
           {/* Connected */}
-          {step === 'connected' && (
+          {step === 'connected' && !showSetup && (
             <div className="text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8 text-success" />
@@ -206,11 +243,11 @@ export default function WhatsAppLogin() {
               <div className="space-y-1">
                 <p className="text-sm font-medium text-success">Connected & Ready</p>
                 <p className="text-xs text-muted-foreground">
-                  Your WhatsApp account is linked and ready to send messages
+                  Instance: {instance?.instance_name}
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => checkStatus()}>
+                <Button variant="outline" size="sm" className="flex-1" onClick={checkStatus}>
                   <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                   Refresh
                 </Button>
@@ -223,7 +260,7 @@ export default function WhatsAppLogin() {
           )}
 
           {/* Error */}
-          {step === 'error' && (
+          {step === 'error' && !showSetup && (
             <div className="text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
                 <XCircle className="w-8 h-8 text-destructive" />
