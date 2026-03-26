@@ -1,25 +1,16 @@
-// Green API WhatsApp client
-// Uses Green API's hosted WhatsApp service — no server deployment needed
-// Docs: https://green-api.com/en/docs/
+// Green API WhatsApp client — per-user credentials version
+// Each user has their own idInstance + apiToken stored in the database
 
 const API_URL = 'https://api.green-api.com';
-const MEDIA_URL = 'https://media.green-api.com';
 
-const getIdInstance = () => {
-  const id = import.meta.env.VITE_GREEN_API_ID_INSTANCE;
-  if (!id) throw new Error('VITE_GREEN_API_ID_INSTANCE is not configured');
-  return id;
-};
+export interface UserCredentials {
+  idInstance: string;
+  apiToken: string;
+}
 
-const getApiToken = () => {
-  const token = import.meta.env.VITE_GREEN_API_TOKEN;
-  if (!token) throw new Error('VITE_GREEN_API_TOKEN is not configured');
-  return token;
-};
-
-/** Build Green API endpoint URL */
-const endpoint = (method: string) =>
-  `${API_URL}/waInstance${getIdInstance()}/${method}/${getApiToken()}`;
+/** Build Green API endpoint URL with provided credentials */
+const endpoint = (creds: UserCredentials, method: string) =>
+  `${API_URL}/waInstance${creds.idInstance}/${method}/${creds.apiToken}`;
 
 export interface WhatsAppStatus {
   status: 'disconnected' | 'qr_pending' | 'connected' | 'error';
@@ -33,12 +24,6 @@ export interface SendResult {
   phone: string;
   error?: string;
   timestamp?: string;
-}
-
-export interface BulkSendRequest {
-  messages: { phone: string; message: string }[];
-  delayMin?: number;
-  delayMax?: number;
 }
 
 export interface BulkProgress {
@@ -55,9 +40,7 @@ export interface Reply {
   timestamp: string;
 }
 
-// --- Helpers ---
 function formatPhone(phone: string): string {
-  // Strip everything except digits
   return phone.replace(/[^0-9]/g, '');
 }
 
@@ -70,15 +53,11 @@ function randomBetween(min: number, max: number): number {
 }
 
 export const whatsappApi = {
-  /**
-   * Get current connection state from Green API
-   */
-  async getStatus(): Promise<WhatsAppStatus> {
-    const res = await fetch(endpoint('getStateInstance'));
+  async getStatus(creds: UserCredentials): Promise<WhatsAppStatus> {
+    const res = await fetch(endpoint(creds, 'getStateInstance'));
     if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
     const data = await res.json();
 
-    // Green API states: notAuthorized, authorized, blocked, sleepMode, starting
     const stateMap: Record<string, WhatsAppStatus['status']> = {
       authorized: 'connected',
       notAuthorized: 'disconnected',
@@ -94,54 +73,29 @@ export const whatsappApi = {
     };
   },
 
-  /**
-   * Get QR code for scanning (returns base64 image)
-   */
-  async getQrCode(): Promise<{ qr: string | null; status: string }> {
-    const res = await fetch(endpoint('qr'));
+  async getQrCode(creds: UserCredentials): Promise<{ qr: string | null; status: string }> {
+    const res = await fetch(endpoint(creds, 'qr'));
     if (!res.ok) {
-      // 460 = already authorized
       if (res.status === 460) return { qr: null, status: 'already_authorized' };
       throw new Error(`QR fetch failed: ${res.status}`);
     }
     const data = await res.json();
-    // data.message contains the QR as base64 image
     return {
       qr: data.message ? `data:image/png;base64,${data.message}` : null,
       status: data.type || 'qr',
     };
   },
 
-  /**
-   * Logout / disconnect the instance
-   */
-  async disconnect(): Promise<{ status: string }> {
-    const res = await fetch(endpoint('logout'), { method: 'GET' });
+  async disconnect(creds: UserCredentials): Promise<{ status: string }> {
+    const res = await fetch(endpoint(creds, 'logout'), { method: 'GET' });
     if (!res.ok) throw new Error(`Disconnect failed: ${res.status}`);
     return { status: 'disconnected' };
   },
 
-  /**
-   * Check if a phone number is registered on WhatsApp
-   */
-  async checkWhatsApp(phone: string): Promise<boolean> {
-    const res = await fetch(endpoint('checkWhatsapp'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phoneNumber: parseInt(formatPhone(phone)) }),
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data.existsWhatsapp === true;
-  },
-
-  /**
-   * Send a single text message
-   */
-  async sendMessage(phone: string, message: string): Promise<SendResult> {
+  async sendMessage(creds: UserCredentials, phone: string, message: string): Promise<SendResult> {
     const chatId = formatPhone(phone) + '@c.us';
     try {
-      const res = await fetch(endpoint('sendMessage'), {
+      const res = await fetch(endpoint(creds, 'sendMessage'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatId, message }),
@@ -164,11 +118,8 @@ export const whatsappApi = {
     }
   },
 
-  /**
-   * Send bulk messages with delays (runs in browser)
-   * Returns a controller object to track progress
-   */
   startBulkSend(
+    creds: UserCredentials,
     messages: { phone: string; message: string }[],
     delayMin = 10,
     delayMax = 30,
@@ -186,15 +137,11 @@ export const whatsappApi = {
     const promise = (async () => {
       for (const { phone, message } of messages) {
         if (cancelled) break;
-
-        const result = await whatsappApi.sendMessage(phone, message);
+        const result = await whatsappApi.sendMessage(creds, phone, message);
         if (result.success) progress.sent++;
         else progress.failed++;
         progress.results.push(result);
-
         onProgress?.({ ...progress });
-
-        // Random delay between messages
         if (!cancelled) {
           const wait = randomBetween(delayMin * 1000, delayMax * 1000);
           await delay(wait);
@@ -208,14 +155,10 @@ export const whatsappApi = {
     return { promise, cancel: () => { cancelled = true; } };
   },
 
-  /**
-   * Get recent incoming messages (last notification from Green API)
-   */
-  async getLastIncomingMessages(): Promise<Reply[]> {
+  async getLastIncomingMessages(creds: UserCredentials): Promise<Reply[]> {
     const replies: Reply[] = [];
-    // Green API uses a webhook/notification queue — poll receiveNotification
     try {
-      const res = await fetch(endpoint('receiveNotification'));
+      const res = await fetch(endpoint(creds, 'receiveNotification'));
       if (!res.ok || res.status === 204) return replies;
       const data = await res.json();
       if (!data) return replies;
@@ -229,9 +172,8 @@ export const whatsappApi = {
         });
       }
 
-      // Delete the notification after reading
       if (data.receiptId) {
-        await fetch(endpoint('deleteNotification') + `/${data.receiptId}`, {
+        await fetch(endpoint(creds, 'deleteNotification') + `/${data.receiptId}`, {
           method: 'DELETE',
         });
       }
@@ -239,15 +181,5 @@ export const whatsappApi = {
       // Silently fail for polling
     }
     return replies;
-  },
-
-  isConfigured(): boolean {
-    try {
-      getIdInstance();
-      getApiToken();
-      return true;
-    } catch {
-      return false;
-    }
   },
 };
