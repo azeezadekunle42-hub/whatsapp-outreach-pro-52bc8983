@@ -31,11 +31,11 @@ export default function Auth() {
           password,
           options: {
             data: { display_name: displayName },
-            emailRedirectTo: window.location.origin,
           },
         });
         if (error) throw error;
-        toast.success('Check your email to confirm your account!');
+        toast.success('Account created! Welcome aboard.');
+        navigate('/');
       }
     } catch (err: any) {
       toast.error(err.message || 'Authentication failed');
