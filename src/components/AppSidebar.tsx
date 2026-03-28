@@ -7,10 +7,7 @@ import {
   Smartphone,
   Activity,
   MessageSquare,
-  LogOut,
-  Shield,
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -19,12 +16,10 @@ const links = [
   { to: '/templates', label: 'Templates', icon: FileText },
   { to: '/accounts', label: 'Accounts', icon: Smartphone },
   { to: '/logs', label: 'Logs & Analytics', icon: Activity },
-  { to: '/admin', label: 'Admin', icon: Shield },
 ];
 
 export default function AppSidebar() {
   const location = useLocation();
-  const { user, signOut } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-60 bg-sidebar flex flex-col z-30">
@@ -55,21 +50,7 @@ export default function AppSidebar() {
         })}
       </nav>
 
-      <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
-        {user && (
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-sidebar-foreground/80 truncate max-w-[140px]">
-              {user.email}
-            </p>
-            <button
-              onClick={signOut}
-              className="text-sidebar-foreground/60 hover:text-sidebar-accent-foreground transition-colors"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+      <div className="px-4 py-4 border-t border-sidebar-border">
         <p className="text-xs text-sidebar-foreground/60">
           WhatsApp Outreach Automation
         </p>
