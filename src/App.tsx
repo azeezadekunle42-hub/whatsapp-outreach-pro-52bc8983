@@ -27,6 +27,7 @@ const App = () => (
             <Route path="/templates" element={<Templates />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/logs" element={<LogsAnalytics />} />
+            <Route path="/messages" element={<Messages />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
