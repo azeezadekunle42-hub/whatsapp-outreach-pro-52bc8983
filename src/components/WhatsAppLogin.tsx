@@ -130,28 +130,25 @@ export default function WhatsAppLogin() {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="rounded-xl border border-border bg-card shadow-md overflow-hidden">
-        {/* Header */}
         <div className="px-6 pt-6 pb-4 text-center border-b border-border">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <Smartphone className="w-7 h-7 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold tracking-tight">Your WhatsApp</h2>
+          <h2 className="text-lg font-semibold tracking-tight">WhatsApp Connection</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {step === 'connected'
               ? 'Your WhatsApp account is linked'
               : instance
               ? 'Connect your WhatsApp to start sending'
-              : 'Set up your WhatsApp instance credentials'}
+              : 'Enter your Green API instance credentials'}
           </p>
         </div>
 
-        {/* Body */}
         <div className="p-6">
-          {/* Setup - No credentials yet */}
           {(step === 'setup' || showSetup) && (
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Enter the Green API credentials assigned to you by your admin.
+                Enter your Green API Instance ID and API Token to connect.
               </p>
               <div className="space-y-3">
                 <div>
@@ -176,7 +173,6 @@ export default function WhatsAppLogin() {
             </div>
           )}
 
-          {/* Disconnected */}
           {step === 'disconnected' && !showSetup && (
             <div className="text-center space-y-4">
               <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
@@ -204,7 +200,6 @@ export default function WhatsAppLogin() {
             </div>
           )}
 
-          {/* Connecting */}
           {step === 'connecting' && !showSetup && (
             <div className="text-center space-y-4 py-4">
               <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
@@ -212,7 +207,6 @@ export default function WhatsAppLogin() {
             </div>
           )}
 
-          {/* QR Code */}
           {step === 'qr' && qrImage && !showSetup && (
             <div className="text-center space-y-4">
               <div className="bg-white p-3 rounded-xl inline-block mx-auto shadow-sm border border-border">
@@ -234,7 +228,6 @@ export default function WhatsAppLogin() {
             </div>
           )}
 
-          {/* Connected */}
           {step === 'connected' && !showSetup && (
             <div className="text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center mx-auto">
@@ -259,7 +252,6 @@ export default function WhatsAppLogin() {
             </div>
           )}
 
-          {/* Error */}
           {step === 'error' && !showSetup && (
             <div className="text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
