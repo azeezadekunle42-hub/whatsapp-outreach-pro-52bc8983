@@ -15,6 +15,7 @@ const links = [
   { to: '/contacts', label: 'Contacts', icon: Users },
   { to: '/templates', label: 'Templates', icon: FileText },
   { to: '/accounts', label: 'Accounts', icon: Smartphone },
+  { to: '/messages', label: 'Messages', icon: MessageSquare },
   { to: '/logs', label: 'Logs & Analytics', icon: Activity },
 ];
 

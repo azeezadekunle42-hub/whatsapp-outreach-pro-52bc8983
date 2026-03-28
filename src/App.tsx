@@ -9,6 +9,7 @@ import Contacts from "./pages/Contacts";
 import Templates from "./pages/Templates";
 import Accounts from "./pages/Accounts";
 import LogsAnalytics from "./pages/LogsAnalytics";
+import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/templates" element={<Templates />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/logs" element={<LogsAnalytics />} />
+            <Route path="/messages" element={<Messages />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
